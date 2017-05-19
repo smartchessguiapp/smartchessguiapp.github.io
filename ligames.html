@@ -92,7 +92,7 @@
       }
       return result
     }
-    var aggkeys=["variant","speed","status","rated","color","winner"]
+    var aggkeys=["variant","speed","status","rated","color","winner","white","black"]
     function aggregate()
     {
       aggr={}
@@ -104,19 +104,21 @@
         for(i in aggkeys)
         {
           var k=aggkeys[i]
+          var field=r[k]
+          if((k=="white")||(k=="black")) field=r["players"][k]["userId"]
           var v=1
           if(aggr[k]!=undefined)
           {
-            if(aggr[k][r[k]]!=undefined)
+            if(aggr[k][field]!=undefined)
             {
-              v=aggr[k][r[k]]+1
+              v=aggr[k][field]+1
             }
           }
           else
           {
             aggr[k]={}
           }
-          aggr[k][r[k]]=v
+          aggr[k][field]=v
         }
       }      
       d3.select("#allstats").text("games : "+kcnt);
