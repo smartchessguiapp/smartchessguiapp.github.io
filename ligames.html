@@ -2,9 +2,22 @@
   <meta charset="utf-8" />
   <title></title>
   <style>
+      .yellowspan
+      {
+        background-color: #ffffaf;
+      }
+      .bluespan
+      {
+        background-color: #cfcfff;
+      }
       .gentext
       {
         text-align: center;
+        font-family: monospace;
+      }
+      .gentextleft
+      {
+        text-align: left;
         font-family: monospace;
       }
       .numtext
@@ -20,6 +33,22 @@
   </script>
 
   <script>
+
+    var allids={}
+    var size=0
+    var aggr={}
+
+    function reset()
+    {
+      allids={}
+      aggregate()
+      d3.select("#jsonStr").text("");        
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
     function getUrlVars()
     {
         var vars = [], hash;
@@ -32,50 +61,161 @@
         }
         return vars;
     }
-    function getData() {
+    function processJson(json)
+    {
+      var results=json.currentPageResults
+      for(i in results)
+      {
+        var r=results[i]
+        var id=r.id
+        allids[id]=r
+      }      
+    }
+    function sortaggsubkeys(x)
+    {
+      var sortable = [];
+      for (var k in x) {
+          sortable.push([k, x[k]]);
+      }
+      sortable.sort(function(a, b) {
+          return b[1] - a[1];
+      });
+      return sortable
+    }
+    function reportsortedaggsubkeys(x)
+    {
+      var sk=sortaggsubkeys(x)
+      var result=""
+      for(i in sk)
+      {        
+        result+=sk[i][0]+" = "+sk[i][1]+" "
+      }
+      return result
+    }
+    var aggkeys=["variant","speed","status","rated","color","winner"]
+    function aggregate()
+    {
+      aggr={}
+      var kcnt=0
+      for(key in allids)
+      {
+        kcnt+=1
+        var r=allids[key]
+        for(i in aggkeys)
+        {
+          var k=aggkeys[i]
+          var v=1
+          if(aggr[k]!=undefined)
+          {
+            if(aggr[k][r[k]]!=undefined)
+            {
+              v=aggr[k][r[k]]+1
+            }
+          }
+          else
+          {
+            aggr[k]={}
+          }
+          aggr[k][r[k]]=v
+        }
+      }      
+      d3.select("#allstats").text("games : "+kcnt);
+      d3.select("#aggkeys").selectAll("*").remove();
+      for(i in aggkeys)
+      {
+        var k=aggkeys[i]
+        var line=reportsortedaggsubkeys(aggr[k])
+        var p=d3.select("#aggkeys").append("p")
+        p.append("span").text(k).attr("class","yellowspan")
+        p.append("span").text(" : ")
+        p.append("span").text(line)
+      }
+    }
+    var first=true
+    var next=false
+    async function getData() {      
+      d3.selectAll("input").attr("disabled",true)
+      if(first)
+      {
+        first=false
+      }
+      if(next)
+      {
+        var page=parseInt(d3.select("#page").node().value);
+        page=page+1
+        d3.select("#page").node().value=page;       
+        d3.select("#downloadlabel").text("waiting");   
+        await sleep(2000);
+      }              
+      d3.select("#downloadlabel").text("downloading data... "+cnt+" pages left");
       var handle=d3.select("#handle").node().value;
       var page=d3.select("#page").node().value;
       var nb=d3.select("#nb").node().value;
-      var requestUri="https://en.lichess.org/api/user/"+handle+"/games?page="+page+"&nb="+nb
-      d3.select("#requestUri").text(requestUri);
+      var requestUri="https://en.lichess.org/api/user/"+handle+"/games?page="+page+"&nb="+nb      
       d3.json(requestUri, function(error, json) { if (error) throw error;
+        processJson(json)
+        aggregate()
         var jsonStr=JSON.stringify(json)
-        d3.select("#jsonStr").text("length: "+jsonStr.length+"\n"+jsonStr);
+        d3.select("#jsonStr").text(jsonStr);        
+        cnt-=1          
+        if(cnt>0)
+        {          
+          getData()
+        }
+        else
+        {
+          d3.selectAll("input").attr("disabled",null)
+          d3.select("#downloadlabel").text("ready");
+        }
       });
     }
+    var cnt=1
+    function getNextData()
+      {        
+        cnt=parseInt(d3.select("#nextcnt").node().value);
+        first=true        
+        next=true
+        getData()
+      }
   </script>
 </head>
 
 <body>
+  <p class="gentextleft">
+    lichess - get games API - with aggregation
+  </p>
   <p>
-    <form>
+    <form class="gentextleft">
       Handle
       <input type="text" value="sakkozik" id="handle" class="gentext handletext">
       Page
       <input type="text" value="1" id="page" class="gentext numtext">
       Games/page
-      <input type="text" value="10" id="nb" class="gentext numtext">
+      <input type="text" value="100" id="nb" class="gentext numtext">
+      <input type="button" onclick="cnt=1;first=true;next=false;getData()" value="Get page">      
+      <input type="button" onclick="getNextData()" value="Get next : ">            
+      <input type="text" value="1" id="nextcnt" class="gentext numtext">
+      <label class="gentext numtext">page(s)</label>
     </form>
   </p>
+  <label id="downloadlabel" style="font-size: 12px; font-style: italic;">ready
+  </label>  
   <p>
-    <button onclick="getData()">Get data</button>
-  </p>  
-  <p id="requestUri"></p>
+    <span id="allstats" class="gentextleft bluespan"></span>
+    <span style="margin-left: 15px;"><input type="button" onclick="reset()" value="Clear" style="font-size: 10px;"></span>
+  </p>
+  <div id="aggkeys" class="gentextleft">
+  </div>
   <textarea rows="10" cols="80" id="jsonStr"></textarea>>
 
   <script>
     var uv=getUrlVars()
     var user=uv["user"]    
     if(user!=undefined)
-    {
-      console.log(user)
+    {      
       d3.select("#handle").node().value=user
     }
-    var doget=uv["doget"]
-    if(doget!=undefined)
-    {
-      getData()
-    }
+    getData()
   </script>
 </body>
 
